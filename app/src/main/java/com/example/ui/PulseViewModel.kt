@@ -91,6 +91,17 @@ class PulseViewModel(private val dao: PulseDao) : ViewModel() {
             }
         }
     }
+    private val _generatedIdea = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val generatedIdea: StateFlow<String?> = _generatedIdea
+
+    fun generateContentIdea(topic: String) {
+        viewModelScope.launch {
+            _generatedIdea.value = "Generating..."
+            val prompt = "You are a marketing assistant for a business CRM app. Generate 3 short social media post ideas about $topic. Make them engaging."
+            val response = generateIdea(prompt)
+            _generatedIdea.value = response
+        }
+    }
 }
 
 class PulseViewModelFactory(private val dao: PulseDao) : ViewModelProvider.Factory {
