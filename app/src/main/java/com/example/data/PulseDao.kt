@@ -43,4 +43,9 @@ interface PulseDao {
 
     @Query("UPDATE invoice SET status = :status WHERE id = :id")
     suspend fun updateInvoiceStatus(id: Int, status: String)
+    @Query("SELECT * FROM outreach ORDER BY dateSent DESC")
+    fun getOutreach(): Flow<List<Outreach>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOutreach(outreach: Outreach)
 }

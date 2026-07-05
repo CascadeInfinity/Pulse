@@ -39,11 +39,17 @@ fun HomeScreen(viewModel: PulseViewModel, onNavigateToSettings: () -> Unit = {})
     val incomes by viewModel.incomes.collectAsStateWithLifecycle()
     val invoices by viewModel.invoices.collectAsStateWithLifecycle()
     val leads by viewModel.leads.collectAsStateWithLifecycle()
+    val outreachList by viewModel.outreach.collectAsStateWithLifecycle()
     
     val overdueInvoices = invoices.count { it.status == "Overdue" }
     val activeLeads = leads.count { it.status == "Active" }
     val pipelineValue = leads.sumOf { it.value }
     val totalInvoices = invoices.sumOf { it.amount }
+    
+    val todayStart = System.currentTimeMillis() - (System.currentTimeMillis() % 86400000)
+    val outreachToday = outreachList.count { it.dateSent > todayStart }
+    val dailyStreak = if (outreachToday > 0) 6 else 5
+    var showLogWorkDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
@@ -167,7 +173,7 @@ fun HomeScreen(viewModel: PulseViewModel, onNavigateToSettings: () -> Unit = {})
                         icon = Icons.Filled.AlternateEmail,
                         iconTint = OutreachIconColor,
                         title = "OUTREACH",
-                        value = "12/20",
+                        value = "$outreachToday/20",
                         customTopRight = {
                             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Box(modifier = Modifier.size(6.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
@@ -182,7 +188,7 @@ fun HomeScreen(viewModel: PulseViewModel, onNavigateToSettings: () -> Unit = {})
                         icon = Icons.Filled.LocalFireDepartment,
                         iconTint = StreakIconColor,
                         title = "DAILY STREAK",
-                        value = "5",
+                        value = "$dailyStreak",
                         valueSuffix = "DAYS",
                         topRightText = "BEST: 14",
                         topRightColor = StreakBestText
@@ -221,7 +227,7 @@ fun HomeScreen(viewModel: PulseViewModel, onNavigateToSettings: () -> Unit = {})
                             }
                         }
                         Button(
-                            onClick = { /* TODO */ },
+                            onClick = { showLogWorkDialog = true },
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
@@ -231,6 +237,33 @@ fun HomeScreen(viewModel: PulseViewModel, onNavigateToSettings: () -> Unit = {})
                     }
                 }
             }
+        }
+        
+        if (showLogWorkDialog) {
+            var contact by remember { mutableStateOf("") }
+            var channel by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { showLogWorkDialog = false },
+                title = { Text("Log Outreach") },
+                text = {
+                    Column {
+                        OutlinedTextField(value = contact, onValueChange = { contact = it }, label = { Text("Contact Name") })
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(value = channel, onValueChange = { channel = it }, label = { Text("Channel (e.g. LinkedIn, Email)") })
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        if (contact.isNotBlank() && channel.isNotBlank()) {
+                            viewModel.addOutreach(contact, channel)
+                            showLogWorkDialog = false
+                        }
+                    }) { Text("Log") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLogWorkDialog = false }) { Text("Cancel") }
+                }
+            )
         }
     }
 }
@@ -304,12 +337,14 @@ fun MetricCard(
 @Composable
 fun FinancesScreen(viewModel: PulseViewModel) {
     val incomes by viewModel.incomes.collectAsStateWithLifecycle()
+    val expenses by viewModel.expenses.collectAsStateWithLifecycle()
     var showDialog by remember { mutableStateOf(false) }
+    var isExpense by remember { mutableStateOf(false) }
     
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = { showDialog = true }, modifier = Modifier.testTag("add_income_btn")) {
-                Icon(Icons.Filled.Add, "Add Income")
+                Icon(Icons.Filled.Add, "Add Transaction")
             }
         }
     ) { padding ->
@@ -321,7 +356,20 @@ fun FinancesScreen(viewModel: PulseViewModel) {
             items(incomes) { income ->
                 ListItem(
                     headlineContent = { Text(income.note ?: "No note") },
-                    trailingContent = { Text("$${"%.2f".format(income.amount)}") }
+                    trailingContent = { Text("+$${"%.2f".format(income.amount)}", color = PulseSuccess) }
+                )
+                HorizontalDivider()
+            }
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                Text("Expenses", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+            items(expenses) { expense ->
+                ListItem(
+                    headlineContent = { Text(expense.note ?: "No note") },
+                    supportingContent = { Text(expense.category) },
+                    trailingContent = { Text("-$${"%.2f".format(expense.amount)}", color = MaterialTheme.colorScheme.error) }
                 )
                 HorizontalDivider()
             }
@@ -330,11 +378,19 @@ fun FinancesScreen(viewModel: PulseViewModel) {
         if (showDialog) {
             var amountStr by remember { mutableStateOf("") }
             var note by remember { mutableStateOf("") }
+            var category by remember { mutableStateOf("") }
+            
             AlertDialog(
                 onDismissRequest = { showDialog = false },
-                title = { Text("Add Income") },
+                title = { Text(if (isExpense) "Add Expense" else "Add Income") },
                 text = {
                     Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Income")
+                            Switch(checked = isExpense, onCheckedChange = { isExpense = it })
+                            Text("Expense")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = amountStr,
                             onValueChange = { amountStr = it },
@@ -347,12 +403,24 @@ fun FinancesScreen(viewModel: PulseViewModel) {
                             onValueChange = { note = it },
                             label = { Text("Note") }
                         )
+                        if (isExpense) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = category,
+                                onValueChange = { category = it },
+                                label = { Text("Category") }
+                            )
+                        }
                     }
                 },
                 confirmButton = {
                     Button(onClick = {
                         amountStr.toDoubleOrNull()?.let {
-                            viewModel.addIncome(it, note)
+                            if (isExpense) {
+                                viewModel.addExpense(it, category, note)
+                            } else {
+                                viewModel.addIncome(it, note)
+                            }
                             showDialog = false
                         }
                     }) { Text("Save") }

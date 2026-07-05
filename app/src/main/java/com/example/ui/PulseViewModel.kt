@@ -17,6 +17,7 @@ class PulseViewModel(private val dao: PulseDao) : ViewModel() {
     val expenses = dao.getExpenses().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val leads = dao.getLeads().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val invoices = dao.getInvoices().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val outreach = dao.getOutreach().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val totalIncome = incomes.map { list -> list.sumOf { it.amount } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
@@ -64,6 +65,13 @@ class PulseViewModel(private val dao: PulseDao) : ViewModel() {
     fun addLead(name: String, value: Double) {
         viewModelScope.launch {
             dao.insertLead(Lead(name = name, status = "Lead", value = value))
+        }
+    }
+
+    fun addOutreach(contact: String, channel: String, status: String = "Sent") {
+        viewModelScope.launch {
+            val followUp = System.currentTimeMillis() + 3 * 86400000L // 3 days
+            dao.insertOutreach(Outreach(contact = contact, channel = channel, dateSent = System.currentTimeMillis(), followUpDate = followUp, status = status))
         }
     }
 
