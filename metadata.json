@@ -1,0 +1,6 @@
+{
+  "name": "Pulse",
+  "description": "Freelance Finance & Productivity Tracker",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
